@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>God's Eye View - 網頁版</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+    background: #0b1220; color: #e8eefc;
+  }
+  #layout { display: flex; height: 100%; }
+  #sidebar {
+    width: 300px; flex-shrink: 0; background: #111826; padding: 16px;
+    box-sizing: border-box; overflow-y: auto; border-right: 1px solid #26364f;
+  }
+  #mapWrap { position: relative; flex: 1; min-width: 0; }
+  #map { position: absolute; inset: 0; background: #0b1220; }
+
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .subtitle { font-size: 12px; color: #8fa3c0; margin: 0 0 14px; }
+  .section-title { font-size: 12px; color: #cfe3ff; margin: 14px 0 6px; }
+  label.chk { display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer; font-size: 13px; }
+  label.chk input { width: 15px; height: 15px; }
+  select, button {
+    width: 100%; box-sizing: border-box; padding: 7px 10px; margin-top: 4px;
+    background: #1b2434; color: #e8eefc; border: 1px solid #33445f; border-radius: 5px;
+    font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #243149; }
+  button.primary { background: #26c4a4; color: #06231c; font-weight: 600; border: none; }
+  button.primary:hover { background: #2fe0bc; }
+  button.stop { background: #e53935; color: white; border: none; }
+  hr.sep { border: none; border-top: 1px solid #26364f; margin: 14px 0; }
+  #log {
+    list-style: none; margin: 6px 0 0; padding: 8px; height: 220px; overflow-y: auto;
+    background: #0b1220; border: 1px solid #26364f; border-radius: 5px;
+    font-family: Consolas, monospace; font-size: 11px; color: #9fe870;
+  }
+  #log li { margin-bottom: 3px; word-break: break-word; }
+
+  .legend {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: rgba(11,18,32,0.85); color: #cfe3ff; padding: 8px 12px;
+    border-radius: 6px; font-size: 12px; line-height: 1.8; border: 1px solid #26364f;
+  }
+  .legend span.dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.7); }
+  .leaflet-popup-content { font-family: inherit; font-size: 12px; }
+
+  .zoom-hint {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+    background: rgba(251,140,0,0.95); color: #2a1600; padding: 7px 16px; border-radius: 20px;
+    font-size: 13px; font-weight: 600; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  .cam-link-btn {
+    display: inline-block; margin-top: 6px; padding: 5px 12px; border-radius: 4px;
+    background: #26c4a4; color: #06231c; font-weight: 600; font-size: 11px;
+    text-decoration: none; cursor: pointer; border: none;
+  }
+
+  .cam-panel {
+    position: absolute; bottom: 12px; z-index: 1000; width: 290px; max-width: 42vw;
+    background: rgba(11,18,32,0.92); border: 1px solid #26364f; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5); display: none; overflow: hidden;
+  }
+  #camPanelNear { left: 12px; }
+  #camPanelPick { right: 12px; }
+  .cam-panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 10px; font-size: 12px; font-weight: 600; background: #1b2434;
+  }
+  .cam-panel-header button {
+    width: auto; padding: 2px 8px; margin: 0; font-size: 12px; background: transparent; border: none;
+  }
+  .cam-panel-body { padding: 10px; font-size: 12px; line-height: 1.6; }
+  .cam-panel-body img { width: 100%; border-radius: 4px; margin-top: 6px; display: block; background: #000; }
+
+  .my-location-dot {
+    width: 16px; height: 16px; border-radius: 50%; background: #4fc3f7;
+    border: 2px solid white; box-shadow: 0 0 0 6px rgba(79,195,247,0.35);
+  }
+
+  @media (max-width: 760px) {
+    #layout { flex-direction: column; }
+    #sidebar { width: auto; max-height: 45vh; }
+    .cam-panel { max-width: calc(50vw - 18px); }
+  }
+</style>
+</head>
+<body>
+<div id="layout">
+  <div id="sidebar">
+    <h1>God's Eye View</h1>
+    <p class="subtitle">即時全球追蹤 - 網頁版</p>
+
+    <label class="chk"><input type="checkbox" id="chkPlanes"/> ✈ 飛機 (OpenSky，每約10分鐘更新)</label>
+    <label class="chk"><input type="checkbox" id="chkShips"/> 🚢 船隻 (模擬示範資料)</label>
+    <label class="chk"><input type="checkbox" id="chkSatellites"/> 🛰 衛星 (CelesTrak TLE，即時運算)</label>
+    <label class="chk"><input type="checkbox" id="chkQuakes"/> 🌍 地震 (USGS，即時)</label>
+    <label class="chk"><input type="checkbox" id="chkTraffic"/> 🚦 路況 (OSM路網+模擬壅塞)</label>
+    <label class="chk"><input type="checkbox" id="chkCameras"/> 📷 攝影機 (台灣國道/省道即時影像)</label>
+
+    <hr class="sep"/>
+    <div class="section-title">我的位置 (GPS)</div>
+    <button id="btnGps" class="primary">📍 開始定位</button>
+    <div class="section-title" style="margin-top:10px">點選查看攝影機</div>
+    <p style="font-size:12px;color:#8fa3c0;margin:4px 0 0">開啟攝影機圖層後，點地圖上任一位置即可查看該處最近的即時影像</p>
+
+    <hr class="sep"/>
+    <div class="section-title">狀態記錄</div>
+    <ul id="log"></ul>
+  </div>
+
+  <div id="mapWrap">
+    <div id="map"></div>
+    <div class="legend">
+      <div><span class="dot" style="background:#4fc3f7"></span>飛機 / 我的位置</div>
+      <div><span class="dot" style="background:#ffca28"></span>船隻 (模擬)</div>
+      <div><span class="dot" style="background:#ab47bc"></span>衛星</div>
+      <div><span class="dot" style="background:#ef5350"></span>地震</div>
+      <div><span class="dot" style="background:#26c4a4"></span>攝影機</div>
+      <div><span class="dot" style="background:#43a047"></span>路況:順暢 <span class="dot" style="background:#fbc02d"></span>車多 <span class="dot" style="background:#e53935"></span>壅塞</div>
+    </div>
+    <div id="zoomHint" class="zoom-hint"></div>
+
+    <div id="camPanelNear" class="cam-panel">
+      <div class="cam-panel-header">📍 我附近的攝影機 <button onclick="closeCamPanel('Near')">✕</button></div>
+      <div class="cam-panel-body">尚未定位</div>
+    </div>
+    <div id="camPanelPick" class="cam-panel">
+      <div class="cam-panel-header">🖱️ 點選查看的攝影機 <button onclick="closeCamPanel('Pick')">✕</button></div>
+      <div class="cam-panel-body">點地圖上任一位置查看該處攝影機</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script src="js/app.js"></script>
+<script src="js/satellites.js"></script>
+</body>
+</html>
