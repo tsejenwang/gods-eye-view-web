@@ -27,6 +27,12 @@ const colors = {
   cameras: '#26c4a4'
 };
 
+// ---------------- 側邊選單收合 ----------------
+document.getElementById('btnToggleSidebar').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  setTimeout(() => map.invalidateSize(), 220); // 等收合動畫跑完，讓地圖重新計算大小避免出現空白
+});
+
 // ---------------- 狀態記錄 ----------------
 function log(message) {
   const list = document.getElementById('log');
@@ -228,6 +234,7 @@ chkCameras.addEventListener('change', () => {
     layers.cameras.clearLayers();
     setZoomHint('cameras', null);
     closeCamPanel('Pick');
+    closeCamPanel('Near');
     log('已關閉攝影機圖層');
   }
 });
@@ -262,17 +269,32 @@ function updateCamPanel(which, cam, distanceM, distanceLabel) {
     `<button class="cam-link-btn" onclick="window.open('${safeUrl}','_blank','noopener')">在新分頁開啟原始影像 ↗</button>`;
 }
 
-function setCamPanelMessage(which, message) {
+// 如果面板已經顯示過某支攝影機的畫面，之後「找不到」的情況就只疊加一個警告文字、
+// 不清空原本的即時影像，避免使用者移動或點到範圍外時畫面整個消失；
+// 完全還沒顯示過畫面的話，才直接顯示文字訊息。
+function showCameraUnavailable(which, message) {
   const panel = document.getElementById(`camPanel${which}`);
+  const body = panel.querySelector('.cam-panel-body');
   panel.style.display = 'block';
-  panel.querySelector('.cam-panel-body').textContent = message;
+
+  if (body.querySelector('img')) {
+    let warn = body.querySelector('.cam-panel-warning');
+    if (!warn) {
+      warn = document.createElement('div');
+      warn.className = 'cam-panel-warning';
+      body.prepend(warn);
+    }
+    warn.textContent = message;
+  } else {
+    body.textContent = message;
+  }
 }
 
 map.on('click', (e) => {
   if (allCameras.length === 0) return;
   const result = findNearestCamera(e.latlng);
   if (!result || result.distanceM > MAX_CAMERA_DISTANCE_M) {
-    setCamPanelMessage('Pick', '點選位置 50 公里內沒有找到攝影機 (目前資料僅涵蓋台灣國道與省道)');
+    showCameraUnavailable('Pick', '點選位置 50 公里內沒有找到攝影機 (目前資料僅涵蓋台灣國道與省道)');
     return;
   }
   updateCamPanel('Pick', result.cam, result.distanceM, '距離點選位置約');
@@ -373,15 +395,17 @@ function onGpsSuccess(pos) {
 
   log(`目前位置: ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)} (精準度約 ${Math.round(accuracy)} 公尺)`);
 
+  // 只在「距離上次真正更新過的位置」夠遠時才重新整理，並且只有在真的更新時才推進
+  // lastGpsLatLng，否則連續的小幅度GPS飄移永遠不會累積成一次有效的重新整理。
   const moved = lastGpsLatLng ? map.distance(lastGpsLatLng, latlng) : Infinity;
-  lastGpsLatLng = latlng;
 
   if (allCameras.length > 0 && moved > GPS_CAMERA_REFRESH_DISTANCE_M) {
+    lastGpsLatLng = latlng;
     const result = findNearestCamera(latlng);
     if (result && result.distanceM <= MAX_CAMERA_DISTANCE_M) {
       updateCamPanel('Near', result.cam, result.distanceM, '距離目前位置約');
     } else {
-      setCamPanelMessage('Near', '附近 50 公里內沒有攝影機資料 (僅涵蓋台灣國道/省道)');
+      showCameraUnavailable('Near', '目前位置 50 公里內沒有攝影機資料，畫面保留上次範圍內拍到的');
     }
   }
 }
