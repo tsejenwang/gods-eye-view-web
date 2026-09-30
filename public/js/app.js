@@ -265,7 +265,7 @@ function updateCamPanel(which, cam, distanceM, distanceLabel) {
   body.innerHTML =
     `<b>${cam.category} 即時影像</b><br/>${cam.description || ''}<br/>${distanceLabel} ${(distanceM / 1000).toFixed(1)} 公里` +
     `<img src="${cam.streamUrl}" onerror="this.replaceWith(Object.assign(document.createElement('div'),` +
-    `{textContent:'影像暫時無法載入，可能是流量尖峰或攝影機離線',style:'color:#f88;font-size:11px;margin-top:4px;'}))"/>` +
+    `{textContent:'此鏡頭無法直接內嵌顯示 (部分縣市影像來源是網頁而非圖片)，請點下方按鈕開啟',style:'color:#f88;font-size:11px;margin-top:4px;'}))"/>` +
     `<button class="cam-link-btn" onclick="window.open('${safeUrl}','_blank','noopener')">在新分頁開啟原始影像 ↗</button>`;
 }
 

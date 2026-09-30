@@ -32,6 +32,9 @@ jobs:
           node-version: 20
 
       - name: Fetch live data (OpenSky + Taiwan CCTV list)
+        env:
+          TDX_CLIENT_ID: ${{ secrets.TDX_CLIENT_ID }}
+          TDX_CLIENT_SECRET: ${{ secrets.TDX_CLIENT_SECRET }}
         run: |
           node scripts/fetch-planes.mjs
           node scripts/fetch-cameras.mjs
